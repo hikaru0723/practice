@@ -8,6 +8,7 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip> // setprecisionを使用するのに必要
+// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 const double PI = 3.14159265358979323846;
 
