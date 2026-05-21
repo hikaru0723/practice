@@ -246,7 +246,7 @@ std::vector<double> pro_WS(
 
         // パラメータ更新
         lambda += lambda_lr * grad_lambda;
-        // b += b_lr * grad_b;
+        b += b_lr * grad_b;
         sigma2 = (sum_kai + sum_ym2) / n;
 
         //評価指標
@@ -437,7 +437,7 @@ int main()
 
     //======================================
     // 初期値設定
-    double dev = 0.05;
+    double dev = 0.1;
     double sigma2 = dev*dev; 
     double lambda = 0.0;
     double lambda_i = 0.0;
