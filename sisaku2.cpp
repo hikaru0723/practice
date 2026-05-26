@@ -121,7 +121,10 @@ std::vector<double> pro_WS(
     double& sigma2, 
     double& mse,
     double& like,
-    double& s
+    double& s,
+    double& diff,
+    double& ips, 
+    int& gs_iter
 )
 {
     //===========================================================================================
@@ -137,10 +140,9 @@ std::vector<double> pro_WS(
     est = inp;
 
     //ハイパーパラメータの設定
-    double ips = 1e-5;
     double lambda_lr = 1e-7;
     double b_lr = 1e-7;
-    int gs_iter = 0;
+    // int gs_iter = 0;
 
     // Ds^T*Ds の対角成分
     std::vector<double> den_D(n);
@@ -246,7 +248,7 @@ std::vector<double> pro_WS(
 
         // パラメータ更新
         lambda += lambda_lr * grad_lambda;
-        b += b_lr * grad_b;
+        // b += b_lr * grad_b;
         sigma2 = (sum_kai + sum_ym2) / n;
 
         //評価指標
@@ -259,31 +261,18 @@ std::vector<double> pro_WS(
         double sum_x2 = 0.0;
         for(int i = 0; i < n; i++) sum_x2 += est[i] * est[i];
 
-        // if(gs_iter % 50 == 0){ 
-        //     std::cout << "Iter " << gs_iter 
-        //     << " lambda = " << lambda
-        //     << " b = " << b 
-        //     << " sigma2 = " << sigma2  
-        //     << " sum_ym2 = " << sum_ym2 
-        //     << " sum_kai = " << sum_kai 
-        //     << " diff = " << diff
-        //     << " sum_Dx2 = " << sum_Dx2
-        //     << " sum_x2 = " << sum_x2
-        //     << std::endl;
-        // }
-
         diff /= n;
         if (diff < ips) {        
-            std::cout << "Iter " << gs_iter 
-            << " lambda = " << lambda
-            << " b = " << b 
-            << " sigma2 = " << sigma2  
-            << " sum_ym2 = " << sum_ym2 
-            << " sum_kai = " << sum_kai 
-            << " diff = " << diff
-            << " sum_Dx2 = " << sum_Dx2
-            << " sum_x2 = " << sum_x2
-            << std::endl;
+            // std::cout << "Iter " << gs_iter 
+            // << " lambda = " << lambda
+            // << " b = " << b 
+            // << " sigma2 = " << sigma2  
+            // << " sum_ym2 = " << sum_ym2 
+            // << " sum_kai = " << sum_kai 
+            // << " diff = " << diff
+            // << " sum_Dx2 = " << sum_Dx2
+            // << " sum_x2 = " << sum_x2
+            // << std::endl;
 
             break;
         }
@@ -437,7 +426,7 @@ int main()
 
     //======================================
     // 初期値設定
-    double dev = 0.1;
+    double dev = 0.05;
     double sigma2 = dev*dev; 
     double lambda = 0.0;
     double lambda_i = 0.0;
@@ -511,9 +500,20 @@ int main()
         double old_like_max_lambda = like_max_lambda;
         // double lambda_old = lambda;
         double dif_lambda2_min = dif_lambda * dif_lambda;
+        double diff = 0.0;
+        double ips = 1e-5;
+        int gs_iter = 0.0;
         dif_lambda = 0.0;
 
-        est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s);
+        est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s, diff, ips, gs_iter);
+
+        if ( i % (iter / 10) == 0 || i == iter-1 || i == 1){        
+            std::cout << "Iter " << gs_iter 
+            << " lambda = " << lambda
+            << " b = " << b 
+            << " sigma2 = " << sigma2  
+            << std::endl;
+        }
 
         dif_lambda = lambda - lambda_i;
         MSE << std::fixed << std::setprecision(15) << lambda_i << "," << lambda << "," << mse << "," << like << "," << dif_lambda << "," << b << "\n";
