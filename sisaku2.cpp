@@ -140,7 +140,7 @@ std::vector<double> pro_WS(
     est = inp;
 
     //ハイパーパラメータの設定
-    double lambda_lr = 1e-7;
+    double lambda_lr = 1e-3;
     double b_lr = 1e-7;
     // int gs_iter = 0;
 
@@ -424,10 +424,14 @@ int main()
     // }
     //===================================================================================================================
 
+    //=========================================================
+
+    //=========================================================
+    // 劣化信号
+    double dev = 0.05;
     //======================================
     // 初期値設定
-    double dev = 0.05;
-    double sigma2 = dev*dev; 
+    double sigma2 = 0.1; 
     double lambda = 0.0;
     double lambda_i = 0.0;
     double s; // 次数を選択
@@ -493,8 +497,7 @@ int main()
 
     std::cout << "--- Bayesian Optimization Start ---" << std::endl;
 
-    for(int i = 1; i < iter; i++){
-    // while(1){
+    for(int i = 0; i < iter; i++){
         double lambda = lambda_i;
         double like_old = like;
         double old_like_max_lambda = like_max_lambda;
@@ -507,7 +510,7 @@ int main()
 
         est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s, diff, ips, gs_iter);
 
-        if ( i % (iter / 10) == 0 || i == iter-1 || i == 1){        
+        if ( i % (iter / 10) == 0 || i == iter-1 || i == 0){        
             std::cout << "Iter " << gs_iter 
             << " lambda = " << lambda
             << " b = " << b 
@@ -530,14 +533,11 @@ int main()
             mse_min_mse = mse;
             mse_min_est = est;
         }
-
         lambda_i += add;
-
-        // if(like_max_lambda < old_like_max_lambda) break;
     }
     MSE.close();
 
-    for(int i=0.0; i < n; i++) true_noisy_mse += (true_signal[i] - y_noisy[i]) * (true_signal[i] - y_noisy[i]);
+    for(int i=0; i < n; i++) true_noisy_mse += (true_signal[i] - y_noisy[i]) * (true_signal[i] - y_noisy[i]);
     true_noisy_mse /= n;
 
     std::cout << "--- Bayesian Optimization Finished ---" << std::endl;
