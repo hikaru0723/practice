@@ -97,7 +97,9 @@ std::vector<double> pro_WS(
     double& s,
     double& diff,
     double& ips, 
-    int& gs_iter
+    int& gs_iter,
+    int& WS_iter,
+    int& iter
 )
 {
     //===========================================================================================
@@ -113,7 +115,7 @@ std::vector<double> pro_WS(
     est = inp;
 
     //ハイパーパラメータの設定
-    double lambda_lr = 1e-3;
+    double lambda_lr = 1e-7;
     double b_lr = 1e-7;
 
     // Ds^T*Ds の対角成分
@@ -241,7 +243,7 @@ std::vector<double> pro_WS(
 
     //====================================================================================================================================
     // 尤度計算
-    double mQm = 0.0;
+    double mWm = 0.0;
     double sum_ln_kai = 0.0;
     double sum_ln_psi = 0.0;
 
@@ -265,7 +267,7 @@ std::vector<double> pro_WS(
     //--------------------------------------------
     // mQm = est^T Q est
     //--------------------------------------------
-    for (int i = 0; i < n; ++i) mQm += est[i] * (lambda * mLambda[i] + (b + 1.0 / sigma2) * est[i]);
+    for (int i = 0; i < n; ++i) mWm += est[i] * (lambda * mLambda[i] + (b + 1.0 / sigma2) * est[i]);
 
     for(int i=0; i<n; i++) sum_ln_kai += log(kai[i]);
     for(int i=0; i<n; i++) sum_ln_psi += log(psi[i]);
@@ -273,11 +275,26 @@ std::vector<double> pro_WS(
     double sum_y2 = 0.0;
     for (int i = 0; i < n; ++i) sum_y2 += inp[i] * inp[i];
 
-    like = (1.0 / (2.0 * n)) * mQm
+    like = (1.0 / (2.0 * n)) * mWm
      - (1.0 / (2.0 * n)) * sum_ln_kai
      + (1.0 / (2.0 * n)) * sum_ln_psi
      - 0.5 * log(2.0 * PI * sigma2)
      - (1.0 / (2.0 * n * sigma2)) * sum_y2;
+    
+    if ( WS_iter % (iter / 10) == 0 || WS_iter == iter-1 || WS_iter == 0){
+        std::cout << "Iter " << gs_iter 
+        << " lambda = " << lambda
+        << " b = " << b 
+        << " sigma2 = " << sigma2  
+        << std::endl;
+
+        std::cout << " mWm = " << mWm 
+        << " sum_ln_kai = " << sum_ln_kai
+        << " sum_ln_psi = " << sum_ln_psi 
+        << " ln_2pi_sigma2 = " << log(2.0 * PI * sigma2)
+        << " sum_y2 = " << sum_y2
+        << std::endl;
+    }
     //==============================================================================================================================
 
     for(int i=0; i < n; i++) est[i] += ave;
@@ -310,12 +327,12 @@ int main()
     //     = std::exp(-(x[i] - 50) * (x[i] - 50) / 10) ;
     // }
 
-    for (int i = 0; i < n; i++) {
-        true_signal[i]
-        = 0.3*std::sin((2*PI*x[i])/120) 
-        + 0.2*std::sin((2*PI*x[i])/35) 
-        + 0.15*std::sin((2*PI*x[i])/18);
-    }
+    // for (int i = 0; i < n; i++) {
+    //     true_signal[i]
+    //     = 0.3*std::sin((2*PI*x[i])/120) 
+    //     + 0.2*std::sin((2*PI*x[i])/35) 
+    //     + 0.15*std::sin((2*PI*x[i])/18);
+    // }
 
     // for (int i = 0; i < n; i++) {
     // true_signal[i]
@@ -330,12 +347,12 @@ int main()
     //     = std::sin(x[i]);
     // }
 
-    // for (int i = 0; i < n; i++) {
-    //     true_signal[i] 
-    //     = 0.75 * std::exp(-(x[i] - 10.0) * (x[i] - 10.0) / 5.0) 
-    //     + std::exp(-(x[i] - 40.0) * (x[i] - 40.0) / 5.0) 
-    //     + 0.5 * std::exp(-(x[i] - 70.0) * (x[i] - 70.0) / 5.0);
-    // }
+    for (int i = 0; i < n; i++) {
+        true_signal[i] 
+        = 0.75 * std::exp(-(x[i] - 30.0) * (x[i] - 30.0) / 50.0) 
+        + std::exp(-(x[i] - 120.0) * (x[i] - 120.0) / 60.0) 
+        + 0.5 * std::exp(-(x[i] - 200.0) * (x[i] - 200.0) / 70.0);
+    }
 
     // for (int i = 0; i < n; i++) {
     //     true_signal[i] 
@@ -363,17 +380,17 @@ int main()
     double dev = 0.1;
     //======================================
     // 初期値設定
-    double sigma2 = 0.1; 
+    // double sigma2 = 0.05; 
     double lambda = 0.0;
     double lambda_i = 0.0;
     double s;
-    double b = 0.001;
+    // double b = 1e-11;
     //======================================
 
     std::cout << "Please enter the rank of the difference matrix : ";
     std::cin >> s;
 
-    std::cout << "Please enter the initial value for λ : ";
+    std::cout << "Please enter the initial value for lambda : ";
     std::cin >> lambda_i;
 
     //======================================
@@ -423,8 +440,11 @@ int main()
 
     std::cout << "--- Bayesian Optimization Start ---" << std::endl;
 
-    for(int i = 0; i < iter; i++){
+    for(int WS_iter = 0; WS_iter < iter; WS_iter++){
+        double sigma2 = 0.05; 
+        double b = 1e-11;
         double lambda = lambda_i;
+        if(lambda < 1e-12) lambda = 1e-12;
         double like_old = like;
         double old_like_max_lambda = like_max_lambda;
         double dif_lambda2_min = dif_lambda * dif_lambda;
@@ -433,15 +453,7 @@ int main()
         int gs_iter = 0.0;
         dif_lambda = 0.0;
 
-        est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s, diff, ips, gs_iter);
-
-        if ( i % (iter / 10) == 0 || i == iter-1 || i == 0){        
-            std::cout << "Iter " << gs_iter 
-            << " lambda = " << lambda
-            << " b = " << b 
-            << " sigma2 = " << sigma2  
-            << std::endl;
-        }
+        est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s, diff, ips, gs_iter, WS_iter, iter);
 
         dif_lambda = lambda - lambda_i;
         MSE << std::fixed << std::setprecision(15) << lambda_i << "," << lambda << "," << mse << "," << like << "," << dif_lambda << "," << b << "\n";
