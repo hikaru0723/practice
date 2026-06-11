@@ -82,6 +82,27 @@ Matrix generate_DsDs(Matrix& Ds, double& n, double& s){
 
 //=================================================================================================================
 // 確率モデル化Whittaker Smoother
+// std::vector<double> pro_WS(
+//     std::vector<double>& inp, 
+//     std::vector<double>& true_signal, 
+//     std::vector<double>& phi,
+//     Matrix& Ds,
+//     Matrix& DsDs,
+//     double& n, 
+//     double& lambda, 
+//     double& b, 
+//     double& sigma2, 
+//     double& mse,
+//     double& like,
+//     double& s,
+//     double& diff,
+//     double& ips, 
+//     int& gs_iter,
+//     int& iter_lambda,
+//     int& iter_lambda_max,
+//     int& iter_b,
+//     int& iter_b_max
+// )
 std::vector<double> pro_WS(
     std::vector<double>& inp, 
     std::vector<double>& true_signal, 
@@ -98,8 +119,8 @@ std::vector<double> pro_WS(
     double& diff,
     double& ips, 
     int& gs_iter,
-    int& WS_iter,
-    int& iter
+    int& iter_lambda,
+    int& iter_lambda_max
 )
 {
     //===========================================================================================
@@ -115,8 +136,8 @@ std::vector<double> pro_WS(
     est = inp;
 
     //ハイパーパラメータの設定
-    double lambda_lr = 1e-7;
-    double b_lr = 1e-7;
+    double lambda_lr = 1e-1;
+    double b_lr = 1e-3;
 
     // Ds^T*Ds の対角成分
     std::vector<double> den_D(n);
@@ -127,6 +148,8 @@ std::vector<double> pro_WS(
     std::vector<double> den_Q(n); 
     std::vector<double> est_old(n);
     std::vector<double> old_sigma2_est(n);
+    double grad_lambda = 0.0;
+    double grad_b = 0.0;
     
     // || m_new - m_old || < eps まで反復
     while(1){
@@ -189,8 +212,8 @@ std::vector<double> pro_WS(
             double sum_m2 = 0.0;
             for (int i = 0; i < n; ++i) sum_m2 += est[i] * est[i];
 
-            double grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
-            double grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
+            grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
+            grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
 
             // パラメータ更新
             lambda += lambda_lr * grad_lambda;
@@ -280,20 +303,60 @@ std::vector<double> pro_WS(
      + (1.0 / (2.0 * n)) * sum_ln_psi
      - 0.5 * log(2.0 * PI * sigma2)
      - (1.0 / (2.0 * n * sigma2)) * sum_y2;
-    
-    if ( WS_iter % (iter / 10) == 0 || WS_iter == iter-1 || WS_iter == 0){
-        std::cout << "Iter " << gs_iter 
-        << " lambda = " << lambda
-        << " b = " << b 
-        << " sigma2 = " << sigma2  
-        << std::endl;
 
-        std::cout << " mWm = " << mWm 
-        << " sum_ln_kai = " << sum_ln_kai
-        << " sum_ln_psi = " << sum_ln_psi 
-        << " ln_2pi_sigma2 = " << log(2.0 * PI * sigma2)
-        << " sum_y2 = " << sum_y2
-        << std::endl;
+
+    //=========================================================================================
+    // あらためて勾配を計算
+    for (int i = 0; i < n; ++i) {
+        psi[i] = lambda * phi[i] + b;
+        kai[i] = psi[i] + 1.0 / sigma2;
+    }
+
+    double sum_phi_psi_kai = 0.0;
+    for (int i = 0; i < n; ++i)sum_phi_psi_kai += phi[i] / (psi[i] * kai[i]);
+
+    double sum_psi_kai = 0.0;
+    for (int i = 0; i < n; ++i)sum_psi_kai += 1.0 / (psi[i] * kai[i]);
+
+    double sum_mLambdam = 0.0;
+    for (int i = 0; i < n; ++i) sum_mLambdam += mLambda[i] * est[i];
+
+    double sum_m2 = 0.0;
+    for (int i = 0; i < n; ++i) sum_m2 += est[i] * est[i];
+    
+    double sum_kai = 0.0;
+    for (int i = 0; i < n; ++i)sum_kai += 1.0 / kai[i];
+  
+    double sum_ym2 = 0.0;
+    for (int i = 0; i < n; ++i) {
+        double diff = inp[i] - est[i];
+        sum_ym2 += diff * diff;
+    }
+    
+    grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
+    grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
+    //=========================================================================================
+    
+    if ( iter_lambda % (iter_lambda_max / 10) == 0 || iter_lambda == iter_lambda_max-1 || iter_lambda == 0){
+        // if( iter_b == iter_b_max - 1){
+            std::cout 
+            << "gs_iter " << gs_iter 
+            << " lambda = " << lambda
+            << " b = " << b 
+            << " sigma2 = " << sigma2  
+            << std::endl;
+
+            std::cout 
+            << " like = " << like 
+            << " mWm = " << mWm 
+            << " sum_ln_kai = " << sum_ln_kai
+            << " sum_ln_psi = " << sum_ln_psi 
+            << " ln_2pi_sigma2 = " << log(2.0 * PI * sigma2)
+            << " sum_y2 = " << sum_y2
+            << " grad_lambda = " << grad_lambda
+            << " grad_b = " << grad_b
+            << std::endl;
+        // }  
     }
     //==============================================================================================================================
 
@@ -383,6 +446,7 @@ int main()
     // double sigma2 = 0.05; 
     double lambda = 0.0;
     double lambda_i = 0.0;
+    double b_i = 0.0;
     double s;
     // double b = 1e-11;
     //======================================
@@ -392,6 +456,9 @@ int main()
 
     std::cout << "Please enter the initial value for lambda : ";
     std::cin >> lambda_i;
+
+    // std::cout << "Please enter the initial value for b : ";
+    // std::cin >> b_i;
 
     //======================================
     // 劣化信号の作成
@@ -409,16 +476,18 @@ int main()
     double mse=0.0;
     double like=-10000.0;
     double like_max=-10000.0;
-    double like_max_lambda=0.0;
+    double like_max_lambda=-10000.0;
+    double like_max_b=-10000.0;
     double dif_lambda = 10000.0;
     double best_mse_lambda=0.0;
+    double best_mse_b=0.0;
     double mse_old = 10000.0;
     double mse_min_mse = 0.0;
     double like_max_mse = 0.0;
     double true_noisy_mse = 0.0;
 
     std::ofstream MSE("mse.csv");
-    MSE << "lambda_i,lambda,mse,like,dif_lambda,b\n";
+    MSE << "lambda_i,lambda,mse,like,dif_lambda,b,sigma2\n";
 
     Matrix Ds = generate_Ds(n, s);
     Matrix DsDs = generate_DsDs(Ds, n, s);
@@ -429,48 +498,116 @@ int main()
         phi[i] = std::pow(4.0, s) * std::pow(sin, 2.0*s);
     }
 
-    int iter;
-    double add;
+    int iter_lambda_max;
+    double add_lambda;
 
-    std::cout << "Please enter the number of additions : ";
-    std::cin >> iter;
+    int iter_b_max;
+    double add_b;
 
-    std::cout << "Please enter the value to add : ";
-    std::cin >> add;
+    std::cout << "Please enter the number of additions to lambda : ";
+    std::cin >> iter_lambda_max;
+
+    // std::cout << "Please enter the number of additions to b : ";
+    // std::cin >> iter_b_max;
+
+    std::cout << "Please enter the value to add to lambda : ";
+    std::cin >> add_lambda;
+
+    // std::cout << "Please enter the value to add to b : ";
+    // std::cin >> add_b;
 
     std::cout << "--- Bayesian Optimization Start ---" << std::endl;
 
-    for(int WS_iter = 0; WS_iter < iter; WS_iter++){
-        double sigma2 = 0.05; 
-        double b = 1e-11;
-        double lambda = lambda_i;
-        if(lambda < 1e-12) lambda = 1e-12;
-        double like_old = like;
-        double old_like_max_lambda = like_max_lambda;
-        double dif_lambda2_min = dif_lambda * dif_lambda;
-        double diff = 0.0;
-        double ips = 1e-5;
-        int gs_iter = 0.0;
-        dif_lambda = 0.0;
+    double ips = 1e-6;
 
-        est = pro_WS(y_noisy, true_signal, phi, Ds, DsDs, n, lambda, b, sigma2, mse, like, s, diff, ips, gs_iter, WS_iter, iter);
+    for(int iter_lambda = 0; iter_lambda < iter_lambda_max; iter_lambda++){
+        // double sigma2 = 0.05; 
+        double b = 10.0;
+        // double lambda = lambda_i;
+        // if(lambda < 1e-12) lambda = 1e-12;
+        // double like_old = like;
+        // double old_like_max_lambda = like_max_lambda;
+        // double dif_lambda2_min = dif_lambda * dif_lambda;
+        // double diff = 0.0;
+        // int gs_iter = 0;
+        // dif_lambda = 0.0;
 
-        dif_lambda = lambda - lambda_i;
-        MSE << std::fixed << std::setprecision(15) << lambda_i << "," << lambda << "," << mse << "," << like << "," << dif_lambda << "," << b << "\n";
-        if(like > like_max) {
-            like_max = like;
-            like_max_lambda = lambda;
-            like_max_mse = mse;
-            like_max_est = est;
-        }
+        // for(int iter_b = 0; iter_b < iter_b_max; iter_b++){
+            // double b = b_i;
+            double sigma2 = 0.05; 
+            double lambda = lambda_i;
+            if(lambda < 1e-12) lambda = 1e-12;
+            if(b < 1e-12) b = 1e-12;
+            double like_old = like;
+            double old_like_max_lambda = like_max_lambda;
+            // double old_like_max_b = like_max_b;
+            double dif_lambda2_min = dif_lambda * dif_lambda;
+            double diff = 0.0;
+            int gs_iter = 0;
+            dif_lambda = 0.0;
 
-        if(mse < mse_old){
-            mse_old = mse;
-            best_mse_lambda = lambda;
-            mse_min_mse = mse;
-            mse_min_est = est;
-        }
-        lambda_i += add;
+            // est = pro_WS(
+            //     y_noisy, 
+            //     true_signal, 
+            //     phi, 
+            //     Ds, 
+            //     DsDs, 
+            //     n, 
+            //     lambda, 
+            //     b, 
+            //     sigma2, 
+            //     mse, 
+            //     like, 
+            //     s, 
+            //     diff, 
+            //     ips, 
+            //     gs_iter, 
+            //     iter_lambda, 
+            //     iter_lambda_max,
+            //     iter_b,
+            //     iter_b_max
+            // );
+
+                        est = pro_WS(
+                y_noisy, 
+                true_signal, 
+                phi, 
+                Ds, 
+                DsDs, 
+                n, 
+                lambda, 
+                b, 
+                sigma2, 
+                mse, 
+                like, 
+                s, 
+                diff, 
+                ips, 
+                gs_iter, 
+                iter_lambda, 
+                iter_lambda_max
+            );
+
+            dif_lambda = lambda - lambda_i;
+            MSE << std::fixed << std::setprecision(15) << lambda_i << "," << lambda << "," << mse << "," << like << "," << dif_lambda << "," << b << "\n";
+            if(like > like_max) {
+                like_max = like;
+                like_max_lambda = lambda;
+                like_max_b = b;
+                like_max_mse = mse;
+                like_max_est = est;
+            }
+
+            if(mse < mse_old){
+                mse_old = mse;
+                best_mse_lambda = lambda;
+                best_mse_b = b;
+                mse_min_mse = mse;
+                mse_min_est = est;
+            }
+            // b_i += add_b;
+        // }
+        lambda_i += add_lambda;
     }
     MSE.close();
 
@@ -481,9 +618,11 @@ int main()
 
     std::cout 
     << " like_max = " << like_max
-    << " like_max_lambda = " << like_max_lambda 
+    << " like_max_lambda = " << like_max_lambda
+    << " like_max_b = " << like_max_b
     << " like_max_mse = " << like_max_mse 
     << " best_mse_lambda = " << best_mse_lambda 
+    << " best_mse_b = " << best_mse_b 
     << " mse_min_mse = " << mse_min_mse 
     << " true_noisy_mse = " << true_noisy_mse 
     << std::endl;
