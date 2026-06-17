@@ -120,7 +120,8 @@ std::vector<double> pro_WS(
     double& ips, 
     int& gs_iter,
     int& iter_lambda,
-    int& iter_lambda_max
+    int& iter_lambda_max,
+    double& reg_parameter
 )
 {
     //===========================================================================================
@@ -136,8 +137,12 @@ std::vector<double> pro_WS(
     est = inp;
 
     //ハイパーパラメータの設定
-    double lambda_lr = 1e-1;
+    double lambda_lr = 1e-3;
     double b_lr = 1e-3;
+
+    double lambda_first = lambda;
+    double b_first = b;
+    double sigma2_first = sigma2;
 
     // Ds^T*Ds の対角成分
     std::vector<double> den_D(n);
@@ -212,13 +217,16 @@ std::vector<double> pro_WS(
             double sum_m2 = 0.0;
             for (int i = 0; i < n; ++i) sum_m2 += est[i] * est[i];
 
-            grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
-            grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
-
             // パラメータ更新
-            lambda += lambda_lr * grad_lambda;
-            // b += b_lr * grad_b;
+            // grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
+            grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
+            // lambda += lambda_lr * grad_lambda;
+            b += b_lr * grad_b;
             // sigma2 = (sum_kai + sum_ym2) / n;
+
+            // パラメータ更新 正則化した尤度関数
+            grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2) - reg_parameter * lambda;
+            lambda += lambda_lr * grad_lambda;
 
             //評価指標
             double diff = 0.0;
@@ -230,7 +238,7 @@ std::vector<double> pro_WS(
             double sum_x2 = 0.0;
             for(int i = 0; i < n; i++) sum_x2 += est[i] * est[i];
 
-            diff /= n;
+            // diff /= n;
             if (diff < ips) break;
         }
 
@@ -260,7 +268,7 @@ std::vector<double> pro_WS(
 
         double diff = 0.0;
         for (int i = 0; i < n; i++) diff += std::abs(est[i] - old_sigma2_est[i]);
-        diff /= n;
+        // diff /= n;
         if(diff < ips) break;
     }
 
@@ -298,11 +306,21 @@ std::vector<double> pro_WS(
     double sum_y2 = 0.0;
     for (int i = 0; i < n; ++i) sum_y2 += inp[i] * inp[i];
 
+    // like = (1.0 / (2.0 * n)) * mWm
+    //  - (1.0 / (2.0 * n)) * sum_ln_kai
+    //  + (1.0 / (2.0 * n)) * sum_ln_psi
+    //  - 0.5 * log(2.0 * PI * sigma2)
+    //  - (1.0 / (2.0 * n * sigma2)) * sum_y2;
+
+    //===============================================
+    // 正則化　尤度関数
     like = (1.0 / (2.0 * n)) * mWm
      - (1.0 / (2.0 * n)) * sum_ln_kai
      + (1.0 / (2.0 * n)) * sum_ln_psi
      - 0.5 * log(2.0 * PI * sigma2)
-     - (1.0 / (2.0 * n * sigma2)) * sum_y2;
+     - (1.0 / (2.0 * n * sigma2)) * sum_y2
+     - reg_parameter / 2 * lambda * lambda;
+    //=================================================
 
 
     //=========================================================================================
@@ -333,7 +351,8 @@ std::vector<double> pro_WS(
         sum_ym2 += diff * diff;
     }
     
-    grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
+    grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2) - reg_parameter * lambda; //正則化lambda
+    // grad_lambda = -sum_mLambdam / (2*n) + sum_phi_psi_kai / (2*n*sigma2);
     grad_b = -sum_m2 / (2*n) + sum_psi_kai / (2*n*sigma2);
     //=========================================================================================
     
@@ -341,8 +360,11 @@ std::vector<double> pro_WS(
         // if( iter_b == iter_b_max - 1){
             std::cout 
             << "gs_iter " << gs_iter 
-            << " lambda = " << lambda
+            << " lambda_first = " << lambda_first
+            << " lambda_last = " << lambda
+            << " b_first = " << b_first
             << " b = " << b 
+            << " sigma2_first = " << sigma2_first
             << " sigma2 = " << sigma2  
             << std::endl;
 
@@ -390,12 +412,12 @@ int main()
     //     = std::exp(-(x[i] - 50) * (x[i] - 50) / 10) ;
     // }
 
-    // for (int i = 0; i < n; i++) {
-    //     true_signal[i]
-    //     = 0.3*std::sin((2*PI*x[i])/120) 
-    //     + 0.2*std::sin((2*PI*x[i])/35) 
-    //     + 0.15*std::sin((2*PI*x[i])/18);
-    // }
+    for (int i = 0; i < n; i++) {
+        true_signal[i]
+        = 0.3*std::sin((2*PI*x[i])/120) 
+        + 0.2*std::sin((2*PI*x[i])/35) 
+        + 0.15*std::sin((2*PI*x[i])/18);
+    }
 
     // for (int i = 0; i < n; i++) {
     // true_signal[i]
@@ -410,12 +432,12 @@ int main()
     //     = std::sin(x[i]);
     // }
 
-    for (int i = 0; i < n; i++) {
-        true_signal[i] 
-        = 0.75 * std::exp(-(x[i] - 30.0) * (x[i] - 30.0) / 50.0) 
-        + std::exp(-(x[i] - 120.0) * (x[i] - 120.0) / 60.0) 
-        + 0.5 * std::exp(-(x[i] - 200.0) * (x[i] - 200.0) / 70.0);
-    }
+    // for (int i = 0; i < n; i++) {
+    //     true_signal[i] 
+    //     = 0.75 * std::exp(-(x[i] - 30.0) * (x[i] - 30.0) / 50.0) 
+    //     + std::exp(-(x[i] - 120.0) * (x[i] - 120.0) / 60.0) 
+    //     + 0.5 * std::exp(-(x[i] - 200.0) * (x[i] - 200.0) / 70.0);
+    // }
 
     // for (int i = 0; i < n; i++) {
     //     true_signal[i] 
@@ -518,11 +540,12 @@ int main()
 
     std::cout << "--- Bayesian Optimization Start ---" << std::endl;
 
-    double ips = 1e-6;
+    double ips = 1e-4;
+    double reg_parameter = 1e-9; // lambdaに対する正則化パラメータ
 
     for(int iter_lambda = 0; iter_lambda < iter_lambda_max; iter_lambda++){
         // double sigma2 = 0.05; 
-        double b = 10.0;
+        double b = 1.0;
         // double lambda = lambda_i;
         // if(lambda < 1e-12) lambda = 1e-12;
         // double like_old = like;
@@ -568,7 +591,7 @@ int main()
             //     iter_b_max
             // );
 
-                        est = pro_WS(
+            est = pro_WS(
                 y_noisy, 
                 true_signal, 
                 phi, 
@@ -585,7 +608,8 @@ int main()
                 ips, 
                 gs_iter, 
                 iter_lambda, 
-                iter_lambda_max
+                iter_lambda_max,
+                reg_parameter
             );
 
             dif_lambda = lambda - lambda_i;
