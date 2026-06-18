@@ -155,6 +155,7 @@ std::vector<double> pro_WS(
     std::vector<double> old_sigma2_est(n);
     double grad_lambda = 0.0;
     double grad_b = 0.0;
+    double diff_est = 0.0;
     
     // || m_new - m_old || < eps まで反復
     while(1){
@@ -229,7 +230,7 @@ std::vector<double> pro_WS(
             lambda += lambda_lr * grad_lambda;
 
             //評価指標
-            double diff = 0.0;
+            diff = 0.0;
             for (int i = 0; i < n; i++) diff += std::abs(est[i] - est_old[i]);
 
             double sum_Dx2 = 0.0;
@@ -266,10 +267,13 @@ std::vector<double> pro_WS(
             }
         }
 
-        double diff = 0.0;
+        diff = 0.0;
         for (int i = 0; i < n; i++) diff += std::abs(est[i] - old_sigma2_est[i]);
         // diff /= n;
-        if(diff < ips) break;
+        if(diff < ips){ 
+            diff_est = diff;
+            break;
+        }
     }
 
     //====================================================================================================================================
@@ -366,6 +370,7 @@ std::vector<double> pro_WS(
             << " b = " << b 
             << " sigma2_first = " << sigma2_first
             << " sigma2 = " << sigma2  
+            << " diff_est = " << diff_est
             << std::endl;
 
             std::cout 
@@ -412,12 +417,12 @@ int main()
     //     = std::exp(-(x[i] - 50) * (x[i] - 50) / 10) ;
     // }
 
-    for (int i = 0; i < n; i++) {
-        true_signal[i]
-        = 0.3*std::sin((2*PI*x[i])/120) 
-        + 0.2*std::sin((2*PI*x[i])/35) 
-        + 0.15*std::sin((2*PI*x[i])/18);
-    }
+    // for (int i = 0; i < n; i++) {
+    //     true_signal[i]
+    //     = 0.3*std::sin((2*PI*x[i])/120) 
+    //     + 0.2*std::sin((2*PI*x[i])/35) 
+    //     + 0.15*std::sin((2*PI*x[i])/18);
+    // }
 
     // for (int i = 0; i < n; i++) {
     // true_signal[i]
@@ -432,12 +437,12 @@ int main()
     //     = std::sin(x[i]);
     // }
 
-    // for (int i = 0; i < n; i++) {
-    //     true_signal[i] 
-    //     = 0.75 * std::exp(-(x[i] - 30.0) * (x[i] - 30.0) / 50.0) 
-    //     + std::exp(-(x[i] - 120.0) * (x[i] - 120.0) / 60.0) 
-    //     + 0.5 * std::exp(-(x[i] - 200.0) * (x[i] - 200.0) / 70.0);
-    // }
+    for (int i = 0; i < n; i++) {
+        true_signal[i] 
+        = 0.75 * std::exp(-(x[i] - 30.0) * (x[i] - 30.0) / 50.0) 
+        + std::exp(-(x[i] - 120.0) * (x[i] - 120.0) / 60.0) 
+        + 0.5 * std::exp(-(x[i] - 200.0) * (x[i] - 200.0) / 70.0);
+    }
 
     // for (int i = 0; i < n; i++) {
     //     true_signal[i] 
@@ -545,7 +550,7 @@ int main()
 
     for(int iter_lambda = 0; iter_lambda < iter_lambda_max; iter_lambda++){
         // double sigma2 = 0.05; 
-        double b = 1.0;
+        double b = 10.0;
         // double lambda = lambda_i;
         // if(lambda < 1e-12) lambda = 1e-12;
         // double like_old = like;
